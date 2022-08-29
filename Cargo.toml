@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 nom = "7.0"
-av-data = "0.3"
+av-data = "0.4"
 av-format = "0.5.0"
 
 [profile.release]
