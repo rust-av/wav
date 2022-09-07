@@ -21,8 +21,8 @@ impl WavMuxer {
         }
     }
 
-    fn patch_size<WO: WriteOwned, WS: WriteSeek>(bw: &mut Writer<WO, WS>, pos: u64) -> Result<()> {
-        let size = bw.position()? - pos;
+    fn patch_size<W: Write>(bw: &mut Writer<W>, pos: u64) -> Result<()> {
+        let size = bw.position() as u64 - pos;
         bw.seek(SeekFrom::Current(-((size + 4) as i64)))?;
         bw.write_all(&(size as u32).to_le_bytes())?;
         bw.seek(SeekFrom::End(0))?;
@@ -35,10 +35,7 @@ impl Muxer for WavMuxer {
         Ok(())
     }
 
-    fn write_header<WO: WriteOwned, WS: WriteSeek>(
-        &mut self,
-        out: &mut Writer<WO, WS>,
-    ) -> Result<()> {
+    fn write_header<W: Write>(&mut self, out: &mut Writer<W>) -> Result<()> {
         let edata_len = self.format.edata.as_ref().map(|buf| buf.len()).unwrap_or(0);
 
         if edata_len >= (1 << 16) {
@@ -82,23 +79,16 @@ impl Muxer for WavMuxer {
 
         out.write_all(&buf)?;
 
-        self.data_pos = out.position()?;
+        self.data_pos = out.position() as u64;
         Ok(())
     }
 
-    fn write_packet<WO: WriteOwned, WS: WriteSeek>(
-        &mut self,
-        out: &mut Writer<WO, WS>,
-        pkt: Arc<Packet>,
-    ) -> Result<()> {
+    fn write_packet<W: Write>(&mut self, out: &mut Writer<W>, pkt: Arc<Packet>) -> Result<()> {
         out.write_all(&pkt.data)?;
         Ok(())
     }
 
-    fn write_trailer<WO: WriteOwned, WS: WriteSeek>(
-        &mut self,
-        out: &mut Writer<WO, WS>,
-    ) -> Result<()> {
+    fn write_trailer<W: Write>(&mut self, out: &mut Writer<W>) -> Result<()> {
         Self::patch_size(out, self.data_pos)?;
         Self::patch_size(out, 8)?;
         Ok(())
@@ -137,7 +127,7 @@ mod tests {
         println!("read headers: {:?}", demuxer.read_headers().unwrap());
 
         let mux = WavMuxer::new(demuxer.demuxer().format.clone());
-        let writer = Writer::from_seekable(Cursor::new(Vec::new()));
+        let writer = Writer::new(Cursor::new(Vec::new()));
 
         let mut muxer = Context::new(mux, writer);
         muxer.configure().unwrap();
@@ -171,7 +161,7 @@ mod tests {
                 }
             }
         }
-        Ok(muxer.writer().seekable_object().unwrap().into_inner())
+        Ok(muxer.writer().as_ref().0.into_inner().to_owned())
     }
 
     #[test]
